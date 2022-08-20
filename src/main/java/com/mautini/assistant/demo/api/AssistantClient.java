@@ -1,14 +1,6 @@
 package com.mautini.assistant.demo.api;
 
-import com.google.assistant.embedded.v1alpha2.AssistConfig;
-import com.google.assistant.embedded.v1alpha2.AssistRequest;
-import com.google.assistant.embedded.v1alpha2.AssistResponse;
-import com.google.assistant.embedded.v1alpha2.AudioInConfig;
-import com.google.assistant.embedded.v1alpha2.AudioOutConfig;
-import com.google.assistant.embedded.v1alpha2.DeviceConfig;
-import com.google.assistant.embedded.v1alpha2.DialogStateIn;
-import com.google.assistant.embedded.v1alpha2.EmbeddedAssistantGrpc;
-import com.google.assistant.embedded.v1alpha2.SpeechRecognitionResult;
+import com.google.assistant.embedded.v1alpha2.*;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.protobuf.ByteString;
@@ -29,8 +21,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class AssistantClient implements StreamObserver<AssistResponse> {
@@ -49,11 +40,11 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
     // if text inputType, text query is set
     private String textQuery;
 
-    private byte[] audioResponse;
-
     private String textResponse;
 
     private final IoConf ioConf;
+
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
 
     /**
      * Conversation state to continue a conversation if needed
@@ -122,11 +113,8 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
      */
     public void requestAssistant(byte[] request) throws ConverseException {
         switch (ioConf.getInputMode()) {
-            case IoConf.AUDIO:
-                audioResponse = audioRequestAssistant(request);
-                break;
             case IoConf.TEXT:
-                audioResponse = textRequestAssistant(request);
+                textResponse = new String( textRequestAssistant(request));
                 break;
             default:
                 LOGGER.error("Unknown input mode {}", ioConf.getInputMode());
@@ -146,90 +134,64 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
             finishLatch = new CountDownLatch(1);
             // Send the config request
             StreamObserver<AssistRequest> requester = embeddedAssistantStub.assist(this);
+
             requester.onNext(getConfigRequest());
 
-            LOGGER.info("Requesting the assistant");
+            LOGGER.info("Requesting the assistant {}", textQuery);
 
+
+            final Integer[] totalTries = {0};
+            totalTries[0]= 5;
+            final Integer[] count = {0};
+            Future<?> future = executor.submit(() -> {
+                while (textResponse == null && count[0] < totalTries[0]) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    count[0]++;
+                    LOGGER.debug("Tried {} times", count[0]);
+                }
+                if (textResponse == null) {
+                    LOGGER.warn("Did not receive any text response");
+                } else {
+                    LOGGER.info("Seeing text response {}", textResponse);
+                }
+            });
+
+            future.get();
             // Mark the end of requests
             requester.onCompleted();
 
             // Receiving happens asynchronously
             boolean expired = finishLatch.await(1, TimeUnit.MINUTES);
             if (expired) {
-                LOGGER.warn("Waited too much time for the response, It could return bad result");
+                LOGGER.debug("Waited too much time for the response, It could return bad result");
             }
 
             return currentResponse.toByteArray();
         } catch (Exception e) {
             throw new ConverseException("Error requesting the assistant", e);
         }
-    }
-
-    public byte[] getAudioResponse() {
-        return audioResponse;
     }
 
     public String getTextResponse() {
         return textResponse;
     }
 
-    /**
-     * Handle audio request
-     *
-     * @param request byte[]
-     * @return byte[]
-     */
-    private byte[] audioRequestAssistant(byte[] request) throws ConverseException {
-        try {
-            // Reset the byte array
-            currentResponse = new ByteArrayOutputStream();
-            finishLatch = new CountDownLatch(1);
-
-            LOGGER.info("Requesting the assistant");
-            // Send the config request
-            StreamObserver<AssistRequest> requester = embeddedAssistantStub.assist(this);
-            requester.onNext(getConfigRequest());
-
-            // Divide the audio request into chunks
-            byte[][] chunks = divideArray(request, assistantConf.getChunkSize());
-
-            // Send a request for each chunk
-            for (byte[] chunk : chunks) {
-                ByteString audioIn = ByteString.copyFrom(chunk);
-
-                // Chunk of the request
-                AssistRequest assistRequest = AssistRequest
-                        .newBuilder()
-                        .setAudioIn(audioIn)
-                        .build();
-
-                requester.onNext(assistRequest);
-            }
-
-            // Mark the end of requests
-            requester.onCompleted();
-
-            // Receiving happens asynchronously
-            boolean expired = finishLatch.await(1, TimeUnit.MINUTES);
-            if (expired) {
-                LOGGER.warn("Waited too much time for the response, It could return bad result");
-            }
-
-            return currentResponse.toByteArray();
-        } catch (Exception e) {
-            throw new ConverseException("Error requesting the assistant", e);
-        }
-    }
-
     @Override
     public void onNext(AssistResponse value) {
+        if(value.getEventType() == AssistResponse.EventType.END_OF_UTTERANCE){
+            LOGGER.info("Event type : {}", value.getEventType().name());
+        }
         try {
             if (value.getEventType() != AssistResponse.EventType.EVENT_TYPE_UNSPECIFIED) {
 
                 LOGGER.info("Event type : {}", value.getEventType().name());
             }
 
-            currentResponse.write(value.getAudioOut().getAudioData().toByteArray());
+            //currentResponse.write(value.getDialogStateOut().getSupplementalDisplayText().getBytes());
             currentConversationState = value.getDialogStateOut().getConversationState();
 
             String userRequest = value.getSpeechResultsList().stream()
@@ -245,6 +207,7 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
 
                 // Capturing string response for text query output
                 this.textResponse = value.getDialogStateOut().getSupplementalDisplayText();
+                LOGGER.info("SEEING {}",this.textResponse);
             }
 
         } catch (Exception e) {
@@ -261,6 +224,9 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
     @Override
     public void onCompleted() {
         LOGGER.info("End of the response");
+        if(textResponse.isEmpty()){
+            textResponse = "NO_RESPONSE";
+        }
         finishLatch.countDown();
     }
 

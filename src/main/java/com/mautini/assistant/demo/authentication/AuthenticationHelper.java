@@ -10,14 +10,7 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-import java.awt.*;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URI;
+import java.io.*;
 import java.net.URISyntaxException;
 import java.util.Optional;
 
@@ -132,7 +125,7 @@ public class AuthenticationHelper {
                 "client_id=" + authenticationConf.getClientId();
 
         // Open a browser to authenticate using oAuth2
-        Desktop.getDesktop().browse(new URI(url));
+        LOGGER.info("Get Auth Key using the url :: \n {}",url);
 
         LOGGER.info("Allow the application in your browser and copy the authorization code in the console");
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
