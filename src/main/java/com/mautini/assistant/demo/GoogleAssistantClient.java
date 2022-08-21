@@ -20,16 +20,18 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Calendar;
 
 public class GoogleAssistantClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GoogleAssistantClient.class);
-    private static final String CHECK_TV_ON = "Is the roop google TV on";
-    private static final String SWITCH_ON = "Switch on LED light";
-    private static final String SWITCH_OFF = "Switch off LED light";
-    private static final int hour6 = 12;
+    private static final String CHECK_TV_ON = "Is the roop google TV switched on";
+    private static final String SWITCH_ON = "Switch on TV light";
+    private static final String SWITCH_OFF = "Switch off TV light";
+    private static final int hour6 = 18;
     private static final int nextDayHour2 = 26;
     private static final Location location = new Location("38.631798", "-121.213416");
     private static final SunriseSunsetCalculator calculator = new SunriseSunsetCalculator(location, "America/Los_Angeles");
@@ -68,11 +70,13 @@ public class GoogleAssistantClient {
         // Main loop
         while (true) {
             Instant instant = Instant.now();
-            LocalDateTime local =  LocalDateTime.now();
-            LocalDateTime sixPM = LocalDateTime.from(local.truncatedTo(ChronoUnit.HOURS).plus(hour6, ChronoUnit.HOURS));
-            LocalDateTime nextDay2am= LocalDateTime.from(local.truncatedTo(ChronoUnit.HOURS).plus(nextDayHour2, ChronoUnit.HOURS));
-            if (local.isBefore(sixPM)
-                    || local.isAfter(nextDay2am)) {
+            ZonedDateTime local =  LocalDateTime.now().atZone(ZoneId.of("America/Los_Angeles"));
+            ZonedDateTime sixPM = LocalDateTime.from(local.truncatedTo(ChronoUnit.DAYS).plus(hour6, ChronoUnit.HOURS))
+                    .atZone(ZoneId.of("America/Los_Angeles"));;
+            ZonedDateTime nextDay2am= LocalDateTime.from(local.truncatedTo(ChronoUnit.DAYS).plus(nextDayHour2, ChronoUnit.HOURS))
+                    .atZone(ZoneId.of("America/Los_Angeles"));;
+            if (local.toLocalDateTime().isBefore(sixPM.toLocalDateTime())
+                    || local.toLocalDateTime().isAfter(nextDay2am.toLocalDateTime())) {
                 //switch off light
                 assistantClient.requestAssistant(SWITCH_OFF.getBytes());
                 String actionResponse = assistantClient.getTextResponse();

@@ -224,7 +224,7 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
     @Override
     public void onCompleted() {
         LOGGER.info("End of the response");
-        if(textResponse.isEmpty()){
+        if(textResponse!=null && textResponse.isEmpty()){
             textResponse = "NO_RESPONSE";
         }
         finishLatch.countDown();
