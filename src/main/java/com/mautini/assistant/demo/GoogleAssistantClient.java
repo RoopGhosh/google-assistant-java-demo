@@ -86,7 +86,7 @@ public class GoogleAssistantClient {
         boolean isTVon = response != null && response.toLowerCase().contains("on");
 
         ZonedDateTime local =  LocalDateTime.now().atZone(ZoneId.of("America/Los_Angeles"));
-        boolean isSunset = true;//isAfterSunset(local);
+        boolean isSunset = isAfterSunset(local);
 
         if (isSunset) {
             if (isTVon) {
