@@ -1,0 +1,1 @@
+web: java -jar out/artifacts/google_assistant_java_demo_jar/google-assistant-java-demo.jar
