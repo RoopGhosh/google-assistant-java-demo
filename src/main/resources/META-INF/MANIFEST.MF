@@ -1,3 +1,4 @@
 Manifest-Version: 1.0
-Main-Class: com.mautini.assistant.demo.GoogleAssistantClient
+Main-Class: ghosh.roop.googleassistantstarter.GoogleAssistantStarterAppl
+ ication
 

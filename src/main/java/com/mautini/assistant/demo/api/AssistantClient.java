@@ -18,8 +18,7 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -31,9 +30,6 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
     private CountDownLatch finishLatch = new CountDownLatch(1);
 
     private EmbeddedAssistantGrpc.EmbeddedAssistantStub embeddedAssistantStub;
-
-    private ByteArrayOutputStream currentResponse = new ByteArrayOutputStream();
-
     // See reference.conf
     private final AssistantConf assistantConf;
 
@@ -57,6 +53,8 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
 
     private final Device device;
 
+    private ManagedChannel channel;
+
     public AssistantClient(OAuthCredentials oAuthCredentials, AssistantConf assistantConf, DeviceModel deviceModel,
                            Device device, IoConf ioConf) {
 
@@ -67,7 +65,7 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
         this.ioConf = ioConf;
 
         // Create a channel to the test service.
-        ManagedChannel channel = ManagedChannelBuilder.forAddress(assistantConf.getAssistantApiEndpoint(), 443)
+        channel = ManagedChannelBuilder.forAddress(assistantConf.getAssistantApiEndpoint(), 443)
                 .build();
 
         // Create a stub with credential
@@ -112,9 +110,10 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
      * @param request the request for the assistant (text or voice)
      */
     public void requestAssistant(byte[] request) throws ConverseException {
+        textResponse = null;
         switch (ioConf.getInputMode()) {
             case IoConf.TEXT:
-                textResponse = new String( textRequestAssistant(request));
+                 textRequestAssistant(request);
                 break;
             default:
                 LOGGER.error("Unknown input mode {}", ioConf.getInputMode());
@@ -127,10 +126,9 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
      * @param request byte[]
      * @return byte[]
      */
-    private byte[] textRequestAssistant(byte[] request) throws ConverseException {
+    private void textRequestAssistant(byte[] request) throws ConverseException {
         this.textQuery = new String(request);
         try {
-            currentResponse = new ByteArrayOutputStream();
             finishLatch = new CountDownLatch(1);
             // Send the config request
             StreamObserver<AssistRequest> requester = embeddedAssistantStub.assist(this);
@@ -170,7 +168,6 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
                 LOGGER.debug("Waited too much time for the response, It could return bad result");
             }
 
-            return currentResponse.toByteArray();
         } catch (Exception e) {
             throw new ConverseException("Error requesting the assistant", e);
         }
@@ -203,11 +200,15 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
             }
 
             value.getDialogStateOut().getSupplementalDisplayText();
-            if (!value.getDialogStateOut().getSupplementalDisplayText().isEmpty()) {
-
-                // Capturing string response for text query output
-                this.textResponse = value.getDialogStateOut().getSupplementalDisplayText();
-                LOGGER.info("SEEING {}",this.textResponse);
+            if (!value.getScreenOut().getData().isEmpty()) {
+                String completeString = value.getScreenOut().getData().toString(StandardCharsets.US_ASCII).toLowerCase();
+                String constant = "<div class=\"show_text_container\"> <div> <div class=\"show_text_content\">";
+                if (completeString.contains(constant)) {
+                    int startIndex = completeString.split(constant)[0].lastIndexOf(">");
+                    textResponse = completeString.substring(constant.length()+startIndex + 1,
+                            completeString.indexOf("<", constant.length()+startIndex));
+                    LOGGER.info("SEEING {}",this.textResponse);
+                }
             }
 
         } catch (Exception e) {
@@ -261,11 +262,15 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
                 .setDeviceId(device.getId())
                 .build();
 
+        ScreenOutConfig screenOutConfig = ScreenOutConfig.newBuilder()
+                .setScreenMode(ScreenOutConfig.ScreenMode.PLAYING).build();
+
         AssistConfig.Builder assistConfigBuilder = AssistConfig
                 .newBuilder()
                 .setDialogStateIn(dialogStateInBuilder.build())
                 .setDeviceConfig(deviceConfig)
                 .setAudioInConfig(audioInConfig)
+                .setScreenOutConfig(screenOutConfig)
                 .setAudioOutConfig(audioOutConfig);
 
         // Preparing AssistantConfig based on type of input. ie audio or text
@@ -304,24 +309,7 @@ public class AssistantClient implements StreamObserver<AssistResponse> {
 
     }
 
-    /**
-     * Divide an array of byte in chunks of chunkSize bytes
-     *
-     * @param source    the source byte array
-     * @param chunkSize the size of a chunk
-     * @return an array of chunks
-     * @see <a href="http://stackoverflow.com/questions/3405195/divide-array-into-smaller-parts">Divide array into smaller parts</a>
-     */
-    private byte[][] divideArray(byte[] source, int chunkSize) {
-        byte[][] ret = new byte[(int) Math.ceil(source.length / (double) chunkSize)][chunkSize];
-
-        int start = 0;
-
-        for (int i = 0; i < ret.length; i++) {
-            ret[i] = Arrays.copyOfRange(source, start, start + chunkSize);
-            start += chunkSize;
-        }
-
-        return ret;
+    public ManagedChannel getChannel() {
+        return channel;
     }
 }

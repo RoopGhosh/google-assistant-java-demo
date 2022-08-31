@@ -18,7 +18,6 @@ import com.typesafe.config.ConfigFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -35,18 +34,17 @@ public class GoogleAssistantClient {
     private static final int nextDayHour2 = 26;
     private static final Location location = new Location("38.631798", "-121.213416");
     private static final SunriseSunsetCalculator calculator = new SunriseSunsetCalculator(location, "America/Los_Angeles");
-    public static void main(String[] args) throws AuthenticationException, ConverseException, DeviceRegisterException, InterruptedException {
+    private final Config root = ConfigFactory.load();
+    private final AuthenticationHelper authenticationHelper;
+    private boolean override = false;
 
-        Config root = ConfigFactory.load();
+    public GoogleAssistantClient() throws AuthenticationException {
+
         AuthenticationConf authenticationConf = ConfigBeanFactory.create(root.getConfig("authentication"), AuthenticationConf.class);
         authenticationConf.setClientId(System.getenv("clientId"));
         authenticationConf.setClientSecret(System.getenv("secret"));
-        DeviceRegisterConf deviceRegisterConf = ConfigBeanFactory.create(root.getConfig("deviceRegister"), DeviceRegisterConf.class);
-        AssistantConf assistantConf = ConfigBeanFactory.create(root.getConfig("assistant"), AssistantConf.class);
-        IoConf ioConf = ConfigBeanFactory.create(root.getConfig("io"), IoConf.class);
-
         // Authentication
-        AuthenticationHelper authenticationHelper = new AuthenticationHelper(authenticationConf);
+        authenticationHelper = new AuthenticationHelper(authenticationConf);
         authenticationHelper
                 .authenticate()
                 .orElseThrow(() -> new AuthenticationException("Error during authentication"));
@@ -57,6 +55,12 @@ public class GoogleAssistantClient {
                     .refreshAccessToken()
                     .orElseThrow(() -> new AuthenticationException("Error refreshing access token"));
         }
+    }
+
+    public void scheduledMethod() throws DeviceRegisterException, ConverseException, AuthenticationException, InterruptedException {
+        DeviceRegisterConf deviceRegisterConf = ConfigBeanFactory.create(root.getConfig("deviceRegister"), DeviceRegisterConf.class);
+        AssistantConf assistantConf = ConfigBeanFactory.create(root.getConfig("assistant"), AssistantConf.class);
+        IoConf ioConf = ConfigBeanFactory.create(root.getConfig("io"), IoConf.class);
 
         // Register Device model and device
         DeviceRegister deviceRegister = new DeviceRegister(deviceRegisterConf, authenticationHelper.getOAuthCredentials().getAccessToken());
@@ -66,79 +70,51 @@ public class GoogleAssistantClient {
         AssistantClient assistantClient = new AssistantClient(authenticationHelper.getOAuthCredentials(), assistantConf,
                 deviceRegister.getDeviceModel(), deviceRegister.getDevice(), ioConf);
 
-        boolean isOn = false;
-        // Main loop
-        while (true) {
-            Instant instant = Instant.now();
-            ZonedDateTime local =  LocalDateTime.now().atZone(ZoneId.of("America/Los_Angeles"));
-            ZonedDateTime sixPM = LocalDateTime.from(local.truncatedTo(ChronoUnit.DAYS).plus(hour6, ChronoUnit.HOURS))
-                    .atZone(ZoneId.of("America/Los_Angeles"));;
-            ZonedDateTime nextDay2am= LocalDateTime.from(local.truncatedTo(ChronoUnit.DAYS).plus(nextDayHour2, ChronoUnit.HOURS))
-                    .atZone(ZoneId.of("America/Los_Angeles"));;
-            if (local.toLocalDateTime().isBefore(sixPM.toLocalDateTime())
-                    || local.toLocalDateTime().isAfter(nextDay2am.toLocalDateTime())) {
-                //switch off light
+        // Check if we need to refresh the access token to request the api
+        if (authenticationHelper.expired()) {
+            authenticationHelper
+                    .refreshAccessToken()
+                    .orElseThrow(() -> new AuthenticationException("Error refreshing access token"));
+
+            // Update the token for the assistant client
+            assistantClient.updateCredentials(authenticationHelper.getOAuthCredentials());
+        }
+
+        assistantClient.requestAssistant(CHECK_TV_ON.getBytes());
+        String response = assistantClient.getTextResponse();
+        LOGGER.info(response);
+        boolean isTVon = response != null && response.toLowerCase().contains("on");
+
+        ZonedDateTime local =  LocalDateTime.now().atZone(ZoneId.of("America/Los_Angeles"));
+        boolean isSunset = true;//isAfterSunset(local);
+
+        if (isSunset) {
+            if (isTVon) {
+                assistantClient.requestAssistant(SWITCH_ON.getBytes());
+                String actionResponse = assistantClient.getTextResponse();
+                LOGGER.info(actionResponse);
+                if (actionResponse.toLowerCase().contains("on")) {
+                    //  way to override
+                }
+            } else {
                 assistantClient.requestAssistant(SWITCH_OFF.getBytes());
                 String actionResponse = assistantClient.getTextResponse();
                 LOGGER.info(actionResponse);
-                if (actionResponse!=null && actionResponse.toLowerCase().contains("off")) {
-                    isOn = false;
-                }
-                Thread.sleep(60 * 60 * 1000);
-                continue;
             }
-            assistantClient.requestAssistant(CHECK_TV_ON.getBytes());
-            String response =  assistantClient.getTextResponse();
-            LOGGER.info(response);
-            boolean isTVon = response != null && response.toLowerCase().contains("yes");
-
-            // Check if we need to refresh the access token to request the api
-            if (authenticationHelper.expired()) {
-                authenticationHelper
-                        .refreshAccessToken()
-                        .orElseThrow(() -> new AuthenticationException("Error refreshing access token"));
-
-                // Update the token for the assistant client
-                assistantClient.updateCredentials(authenticationHelper.getOAuthCredentials());
-            }
-
-            boolean isSunset = isAfterSunset(instant);
-
-            if(isSunset){
-                if (isTVon) {
-                    if (isOn) {
-                        //there is nothing to do
-                        Thread.sleep(15 * 60 * 1000);
-                    } else {
-                        // flip
-                        assistantClient.requestAssistant(SWITCH_ON.getBytes());
-                        String actionResponse = assistantClient.getTextResponse();
-                        LOGGER.info(actionResponse);
-                        if(actionResponse.toLowerCase().contains("on")){
-                            isOn = true;
-                        }
-                    }
-                }else {
-                    if(isOn){
-                        assistantClient.requestAssistant(SWITCH_OFF.getBytes());
-                        String actionResponse = assistantClient.getTextResponse();
-                        LOGGER.info(actionResponse);
-                        if(actionResponse.toLowerCase().contains("off")){
-                            isOn = false;
-                        }
-                    }else{
-                        // there is nothing to do here.
-                        Thread.sleep(15 * 60 * 1000);
-                    }
-                }
-
-            }
+        } else {
+            //nothing to do.
+            LOGGER.info("Its not sunset. Sleeping");
         }
+        assistantClient.getChannel().shutdownNow();
     }
-    private static boolean isAfterSunset(Instant instant) {
-        Instant sunSetInstant = calculator.getCivilSunsetCalendarForDate(Calendar.getInstance()).toInstant();
-        Instant sunriseInstant = calculator.getCivilSunriseCalendarForDate(Calendar.getInstance()).toInstant();
-        boolean isAfterSunset =instant.isAfter(sunSetInstant.plus(30, ChronoUnit.MINUTES)) && Instant.now().isBefore(sunriseInstant);
+
+
+    private boolean isAfterSunset(ZonedDateTime localDateTime) {
+        ZonedDateTime sunSetInstant = ZonedDateTime.ofInstant(calculator.getCivilSunsetCalendarForDate(Calendar.getInstance())
+                .toInstant(), ZoneId.of("America/Los_Angeles"));
+        ZonedDateTime sunriseInstant = ZonedDateTime.ofInstant(calculator.getCivilSunriseCalendarForDate(Calendar.getInstance())
+                .toInstant(), ZoneId.of("America/Los_Angeles"));
+        boolean isAfterSunset = localDateTime.isAfter(sunSetInstant.plus(30, ChronoUnit.MINUTES)) && localDateTime.isBefore(sunriseInstant);
         LOGGER.info("Light is supposed to be switched {}", isAfterSunset ? "ON" : "OFF");
         return isAfterSunset;
     }

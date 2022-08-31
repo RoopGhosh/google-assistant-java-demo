@@ -114,10 +114,50 @@
             <artifactId>SunriseSunsetCalculator</artifactId>
             <version>1.2</version>
         </dependency>
+
     </dependencies>
 
     <build>
+        <extensions>
+            <!-- This must be added , otherwise plugin Under the ${os.detected.classifier} There may be a mistake -->
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.6.1</version>
+            </extension>
+        </extensions>
         <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.xolstice.maven.plugins</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <version>0.5.1</version>
+                <configuration>
+                    <!-- proto Directory where files are placed -->
+                    <protoSourceRoot>${basedir}/src/main/proto</protoSourceRoot>
+                    <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}
+                    </protocArtifact>
+                    <pluginId>grpc-java</pluginId>
+                    <!-- artifact to download GRPC protobuf compiler plugin -->
+                    <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}
+                    </pluginArtifact>
+
+                    <!-- Directory of generated files , It can be generated in the source directory -->
+                    <!-- <outputDirectory>${project.basedir}/src/main/java</outputDirectory>-->
+                    <!-- Whether to clear the target directory before generating files , This is best set to false, To avoid deleting project files by mistake -->
+                    <!-- <clearOutputDirectory>false</clearOutputDirectory>-->
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

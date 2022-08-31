@@ -1,5 +1,7 @@
 package com.google.assistant.embedded.v1alpha2;
 
+import io.grpc.ManagedChannel;
+
 import static io.grpc.MethodDescriptor.generateFullMethodName;
 import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
@@ -33,7 +35,7 @@ public final class EmbeddedAssistantGrpc {
   /**
    * Creates a new async stub that supports all call types for the service
    */
-  public static EmbeddedAssistantStub newStub(io.grpc.Channel channel) {
+  public static EmbeddedAssistantStub newStub(ManagedChannel channel) {
     return new EmbeddedAssistantStub(channel);
   }
 
