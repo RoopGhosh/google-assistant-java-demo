@@ -129,8 +129,8 @@ public class AuthenticationHelper {
 
         LOGGER.info("Allow the application in your browser and copy the authorization code in the console");
 
-        LOGGER.info("Waiting for 2 mins before the api key is set in env variable");
-        Thread.sleep(2*60*1000);
+        LOGGER.info("Waiting for 30 secs before the api key is set in env variable");
+        Thread.sleep(30*1000);
         String code = System.getenv("google_key");
         LOGGER.info("Seeing code {}", code );
 
