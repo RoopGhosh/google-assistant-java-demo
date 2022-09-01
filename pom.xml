@@ -8,6 +8,9 @@
     <artifactId>google_assistant_sdk_test_java</artifactId>
     <version>1.0.0</version>
 
+   <!-- <modules>
+        <module>GoogleAssistantStarter</module>
+    </modules>-->
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -208,7 +211,7 @@
                         <manifest>
                             <addClasspath>true</addClasspath>
                             <!-- here we specify that we want to use the main method within the App class -->
-                            <mainClass>com.mautini.assistant.demo.GoogleAssistantClient</mainClass>
+                            <mainClass>ghosh.roop.googleassistantstarter.GoogleAssistantStarterApplication</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

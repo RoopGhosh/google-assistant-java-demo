@@ -117,7 +117,7 @@ public class AuthenticationHelper {
      * @throws URISyntaxException if the request fails
      * @throws IOException        if the request fails
      */
-    private Optional<OAuthCredentials> requestAccessToken() throws URISyntaxException, IOException {
+    private Optional<OAuthCredentials> requestAccessToken() throws URISyntaxException, IOException, InterruptedException {
         String url = "https://accounts.google.com/o/oauth2/v2/auth?" +
                 "scope=" + authenticationConf.getScope() + "&" +
                 "response_type=code&" +
@@ -128,8 +128,11 @@ public class AuthenticationHelper {
         LOGGER.info("Get Auth Key using the url :: \n {}",url);
 
         LOGGER.info("Allow the application in your browser and copy the authorization code in the console");
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String code = br.readLine();
+
+        LOGGER.info("Waiting for 2 mins before the api key is set in env variable");
+        Thread.sleep(2*60*1000);
+        String code = System.getenv("google_key");
+        LOGGER.info("Seeing code {}", code );
 
         Response<OAuthCredentials> response = oAuthClient.getAccessToken(
                         code,
