@@ -13,6 +13,7 @@ import retrofit2.converter.gson.GsonConverterFactory;
 import java.io.*;
 import java.net.URISyntaxException;
 import java.util.Optional;
+import java.util.Scanner;
 
 public class AuthenticationHelper {
 
@@ -131,6 +132,7 @@ public class AuthenticationHelper {
 
         LOGGER.info("Waiting for 30 secs before the api key is set in env variable");
         Thread.sleep(30*1000);
+        Scanner scanner = new Scanner(System.in);;
         String code = System.getenv("google_key");
         LOGGER.info("Seeing code {}", code );
 

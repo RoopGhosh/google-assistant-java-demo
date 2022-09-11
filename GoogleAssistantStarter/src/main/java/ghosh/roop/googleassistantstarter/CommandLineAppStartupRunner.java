@@ -21,7 +21,7 @@ public class CommandLineAppStartupRunner{
         logger.info("Application started with command-line arguments: {} . \n To kill this application, press Ctrl + C.", Arrays.toString(args));
     }
 
-    @Scheduled(cron = "0 0/01 12-23 * * ?", zone = "America/Los_Angeles")
+    @Scheduled(cron = "0 0/10 12-23 * * ?", zone = "America/Los_Angeles")
     public void test() {
         try {
             if (googleAssistantClient == null) {

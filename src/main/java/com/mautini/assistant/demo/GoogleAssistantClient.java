@@ -113,9 +113,9 @@ public class GoogleAssistantClient {
         final ZonedDateTime sunSetInstant = ZonedDateTime.ofInstant(calculator.getCivilSunsetCalendarForDate(Calendar.getInstance())
                 .toInstant(), ZoneId.of("America/Los_Angeles"));
         final ZonedDateTime sunriseInstant = ZonedDateTime.ofInstant(calculator.getCivilSunriseCalendarForDate(Calendar.getInstance())
-                .toInstant().plus(1, ChronoUnit.DAYS)
+                        .toInstant(), ZoneId.of("America/Los_Angeles")).plus(1, ChronoUnit.DAYS)
                 .truncatedTo(ChronoUnit.DAYS)
-                .plus(3, ChronoUnit.HOURS), ZoneId.of("America/Los_Angeles"));
+                .plus(3, ChronoUnit.HOURS);
         boolean isAfterSunset = localDateTime.isAfter(sunSetInstant.plus(30, ChronoUnit.MINUTES)) && localDateTime.isBefore(sunriseInstant);
         LOGGER.info("Light is supposed to be switched {}", isAfterSunset ? "ON" : "OFF");
         return isAfterSunset;
